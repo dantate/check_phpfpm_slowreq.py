@@ -1,6 +1,6 @@
 #!/usr/bin/python -O
 """ Check php_status page for slow requests and report back.  Internal use. (c) 2022 Daniel Tate v1.0 \
-build 2
+build 3
 """
 
 import argparse
@@ -109,53 +109,56 @@ def setup_env ():
         shutil.copy(differential_dir + "00m", differential_dir + "60m")
 
 def validate_differential (old, new, current):
+    old = int(old)
+    new = int(new)
+    current = int(current)
     if int(old) == slow_req:
         if __debug__:
-            print(f"OK: Bans Unchanged {int(new)} == {new}|slow_req={current}")
+            print(f"OK: Slow Reqs Unchanged {int(new)} == {new}|slow_req={current}")
             exit(0)
         else:
-            print(f"OK: Bans Unchanged {int(new)} new in {args.time} min ({current})|new_reqs={new};{args.warn};{args.crit}")
+            print(f"OK: Slow Reqs Unchanged {int(new)} new in {args.time} min ({current})|new_reqs={new};{args.warn};{args.crit}")
             exit(0)
     elif int(old) > slow_req:
         if __debug__:
-            print(f"OK: Decrease in bans {int(old)} > {current}")
+            print(f"OK: Decrease in slow requests {int(old)} > {current}")
             exit(0)
         else:
-            print(f"OK: Decrease in bans from {int(old)} to {current} |new_reqs={new};{args.warn};{args.crit}")
+            print(f"OK: Decrease in slow requests from {int(old)} to {current} |new_reqs={new};{args.warn};{args.crit}")
             exit(0)
     elif (old < args.warn):
         if __debug__:
             print(f"OK: {new} new in {args.time} is less than {args.warn} new in {args.time}")
             exit(0)
         else:
-            print(f"OK: {new} new bans in {args.time} mins ({current})|new_reqs={new};{args.warn};{args.crit}")
+            print(f"OK: {new} new slow requessts in {args.time} mins ({current})|new_reqs={new};{args.warn};{args.crit}")
             exit(0)
     elif (old >= args.warn and new < args.crit):
         if __debug__:
             print( f"WARNING: {new} new in {args.time} is greater than or equal to warn: {args.warn} new in {args.time}")
             exit(1)
         else:
-            print(f"WARNING: {new} new bans in {args.time} mins ({current})|new_reqs={new};{args.warn};{args.crit}")
+            print(f"WARNING: {new} new slow requests in {args.time} mins ({current})|new_reqs={new};{args.warn};{args.crit}")
             exit(1)
     else:
         if __debug__:
-            print(f"CRITICAL: bans: {new} new in {args.time} is greater than crit: {args.crit} new in {args.time}")
+            print(f"CRITICAL: slow reqs: {new} new in {args.time} is greater than crit: {args.crit} new in {args.time}")
             exit(2)
         else:
-            print(f"CRITICAL: bans: {new} new bans in in {args.time} mins ({current})|new_reqs={new};{args.warn};{args.crit}")
+            print(f"CRITICAL: slow reqs: {new} new slow reqs in in {args.time} mins ({current})|new_reqs={new};{args.warn};{args.crit}")
             exit(2)
 
 def validate_normal (reqs):
     if __debug__: print(f"DEBUG: Types: {type(args.warn)}, {type(reqs)}")
     if ( reqs < args.warn ):
-        print('OK', reqs, "| bans=%d" %reqs)
+        print('OK', reqs, "| slow_reqs=%d" %reqs)
         exit(0)
 
     elif ( reqs >= args.warn and reqs < args.crit ):
-        print('WARN', reqs,"| bans=%d" %reqs)
+        print('WARN', reqs,"| slow_reqs=%d" %reqs)
         exit(1)
     else:
-        print('CRITICAL', reqs,"| bans=%d" %reqs)
+        print('CRITICAL', reqs,"| slow_reqs=%d" %reqs)
         exit(2)
 
 if __debug__:
@@ -231,7 +234,7 @@ if (normal_mode == 0):
         print(f"DEBUG: Aging...")
         print("DEBUG: DIFF: ROTATE: File 00m: ",file_age(differential_dir + "00m",timedelta(minutes=args.time)))
     if file_age(differential_dir + "00m",timedelta(minutes=args.time)):
-        rotate() # will prv file w/ bans={log|wc-l}
+        rotate() # will prv file w/ slow_reqs={log|wc-l}
         aged_reqs = get_aged_reqs(differential_dir + str(args.time) +"m")
         new_reqs = (slow_req - int(aged_reqs))
         validate_differential(aged_reqs,new_reqs,slow_req)
