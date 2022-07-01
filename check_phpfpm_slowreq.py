@@ -1,6 +1,6 @@
-#!/usr/bin/python -O
+#!/usr/bin/python3 -O
 """ Check php_status page for slow requests and report back.  Internal use. (c) 2022 Daniel Tate v1.0 \
-build 3
+build 4
 """
 
 import argparse
@@ -16,25 +16,16 @@ from os.path import exists
 
 tmp_dir = "/tmp/phpfpm_diff"
 
-
 differential_dir = tmp_dir + "/"
-
-
-hdr = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 Safari/537.11',
-       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-       'Accept-Charset': 'ISO-8859-1,utf-8;q=0.7,*;q=0.3',
-       'Accept-Encoding': 'none',
-       'Accept-Language': 'en-US,en;q=0.8',
-       'Connection': 'keep-alive'}
 
 user_agent = 'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.9.0.7) Gecko/2009021910 Firefox/3.0.7'
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--crit', help="crit threshold", metavar="crit", type=int)
 parser.add_argument('-w', '--warn', help="warn threshold", metavar="warn", type=int)
-parser.add_argument('-s', '--site', help="warn threshold", metavar="warn")
+parser.add_argument('-s', '--site', help="warn threshold", metavar="warn", type=str)
 parser.add_argument('-d', '--diff', help="Differential Mode", action='store_true')
-parser.add_argument('-t', '--time', help="Time", metavar="time", type=int)
+parser.add_argument('-t', '--time', help="Time", metavar="time", type=int, choices=[30, 60, 90, 120])
 args = parser.parse_args()
 
 def get_status ():
@@ -78,10 +69,10 @@ def get_aged_reqs (difffile):
 
 def rotate():
     if __debug__: print(f"DEBUG: DIFF: ROTATE: File 00m is {args.time} minutes old")
-    os.replace(differential_dir + "45m", differential_dir + "60m")
-    os.replace(differential_dir + "30m", differential_dir + "45m")
-    os.replace(differential_dir + "15m", differential_dir + "30m")
-    os.replace(differential_dir + "00m", differential_dir + "15m")
+    os.replace(differential_dir + "90m", differential_dir + "120m")
+    os.replace(differential_dir + "60m", differential_dir + "90m")
+    os.replace(differential_dir + "30m", differential_dir + "60m")
+    os.replace(differential_dir + "00m", differential_dir + "30m")
     if __debug__: print("DEBUG: DIFF: POSTROTATE: Creating new datafile...")
     with open(differential_dir + "00m", 'w') as f00m:
         str_assemble1 = str(perf_counter())
@@ -103,48 +94,29 @@ def setup_env ():
         write = f00m.write(str(str_assemble))
         if __debug__: print("DEBUG: DIFF: write is", write)
         f00m.close()
-        shutil.copy(differential_dir + "00m", differential_dir + "15m")
         shutil.copy(differential_dir + "00m", differential_dir + "30m")
-        shutil.copy(differential_dir + "00m", differential_dir + "45m")
         shutil.copy(differential_dir + "00m", differential_dir + "60m")
+        shutil.copy(differential_dir + "00m", differential_dir + "90m")
+        shutil.copy(differential_dir + "00m", differential_dir + "120m")
 
 def validate_differential (old, new, current):
     old = int(old)
     new = int(new)
     current = int(current)
     if int(old) == slow_req:
-        if __debug__:
-            print(f"OK: Slow Reqs Unchanged {int(new)} == {new}|slow_req={current}")
-            exit(0)
-        else:
             print(f"OK: Slow Reqs Unchanged {int(new)} new in {args.time} min ({current})|new_reqs={new};{args.warn};{args.crit}")
             exit(0)
     elif int(old) > slow_req:
-        if __debug__:
-            print(f"OK: Decrease in slow requests {int(old)} > {current}")
-            exit(0)
-        else:
-            print(f"OK: Decrease in slow requests from {int(old)} to {current} |new_reqs={new};{args.warn};{args.crit}")
+        # 0 required here or else it skews the graphs with a huge negative drop.
+            print(f"OK: Decrease in slow requests from {int(old)} to {current} |new_reqs=0;{args.warn};{args.crit}")
             exit(0)
     elif (old < args.warn):
-        if __debug__:
-            print(f"OK: {new} new in {args.time} is less than {args.warn} new in {args.time}")
-            exit(0)
-        else:
             print(f"OK: {new} new slow requessts in {args.time} mins ({current})|new_reqs={new};{args.warn};{args.crit}")
             exit(0)
     elif (old >= args.warn and new < args.crit):
-        if __debug__:
-            print( f"WARNING: {new} new in {args.time} is greater than or equal to warn: {args.warn} new in {args.time}")
-            exit(1)
-        else:
             print(f"WARNING: {new} new slow requests in {args.time} mins ({current})|new_reqs={new};{args.warn};{args.crit}")
             exit(1)
     else:
-        if __debug__:
-            print(f"CRITICAL: slow reqs: {new} new in {args.time} is greater than crit: {args.crit} new in {args.time}")
-            exit(2)
-        else:
             print(f"CRITICAL: slow reqs: {new} new slow reqs in in {args.time} mins ({current})|new_reqs={new};{args.warn};{args.crit}")
             exit(2)
 
@@ -178,13 +150,6 @@ if (args.crit is not None) and (args.warn is not None):
     if args.diff is True:
         if __debug__: print(f"DEBUG: args.diff is True")
         normal_mode = 0
-        if __debug__: print("DEBUG: str test for time: ",str(args.time) in {"15", "30", "45", "60"})
-        if str(args.time) in {"15", "30", "45", "60"}:
-            if __debug__: print("DEBUG: Time Matched")
-        else:
-            if __debug__: print("DEBUG: Time NOT Matched")
-            print(f"You must specify 15, 30, 45, or 60 minutes as the time window.")
-            exit(1)
     else:
         if __debug__: print(f"DEBUG: args.diff is False, falling to normal mode")
         normal_mode = 1
